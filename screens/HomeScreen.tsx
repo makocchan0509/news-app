@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet,FlatList, SafeAreaView } from 'react-native';
+import React, { useState, useEffect,useRef } from 'react';
+import {StyleSheet, FlatList, SafeAreaView, RefreshControl} from 'react-native';
 import { ListItem } from '../components/ListItem';
 import Constants from 'expo-constants';
 import axios from 'axios';
@@ -49,29 +49,59 @@ type Props = {
 const HomeScreen: React.FC<Props> = ({ navigation,route }:Props) => {
     const [articles, setArticles] = useState([]);
     const [loading,setLoading] = useState(false);
+    const pageRef = useRef(1);
+    const fetchAllRef = useRef(false);
+    const [refreshing,setRefreshing] = useState(false);
+
     // @ts-ignore
     useEffect(() => {
-        //alert(URL);
-        fetchArticles();
+        setLoading(true);
+        fetchArticles(1);
     },[]);
 
-    const fetchArticles = async () => {
-        setLoading(true);
+    // @ts-ignore
+    const fetchArticles = async (page) => {
         try {
-            const response = await axios.get(URL);
-            setArticles(response.data.articles);
+            const response = await axios.get(`${URL}&page=${page}`);
+            if (response.data.articles.length > 0) {
+                setArticles(articles.concat(response.data.articles));
+            }else{
+                fetchAllRef.current =true;
+            }
         } catch (error) {
             console.error(error);
         }
         setLoading(false);
     };
 
+    const onEndReached = () => {
+        if(!fetchAllRef.current) {
+            pageRef.current = pageRef.current + 1
+            fetchArticles(pageRef.current)
+        }
+    }
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        setArticles([]);
+        pageRef.current = 1;
+        fetchAllRef.current = false;
+        fetchArticles(1);
+        setRefreshing(false);
+    }
     return (
         <SafeAreaView style={styles.container}>
             <FlatList
                 data={articles}
                 renderItem={({ item }:{item: Article}) => <ListItem imageUrl={item.urlToImage} author={item.author} title={item.title} onPress={() => navigation.navigate("Article",{article: item})}/>}
                 keyExtractor={(item, index) => index.toString()}
+                onEndReached={onEndReached}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                    />
+                }
             />
             {loading && <Loading />}
         </SafeAreaView>
